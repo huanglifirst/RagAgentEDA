@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+
+# Jupyter
+.ipynb_checkpoints/
+
+# VSCode/IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Build/Dist
+build/
+dist/
+*.egg-info/
+
+# Node (if any)
+node_modules/
+
+# Large data/models (adjust as needed)
+data/
+models/
+*.pt
+*.pth
+*.onnx
