@@ -1,0 +1,32 @@
+# ~/.bashrc_conda
+# 进入 conda 模式，让 conda env 完全干净（不被 TED / ~/.local 污染）
+
+# 0) 禁止用户站点包 ~/.local 参与导入（保证“所有东西都在 conda env”）
+export PYTHONNOUSERSITE=1
+unset PIP_USER
+
+# 1) 清理 PYTHONPATH: 移除 TED 和 ~/.local 的 site-packages 注入
+export PYTHONPATH=$(echo "$PYTHONPATH" | tr ':' '\n' \
+  | grep -v "$HOME/.local/lib/python3.9/site-packages" \
+  | grep -v "/share/software/TED/python3/lib/python3.9/site-packages" \
+  | awk 'NF' | awk '!seen[$0]++' \
+  | paste -sd: -)
+
+# 2) 初始化 conda（兼容你这台 conda 4.5.12：用 conda.sh）
+if [ -f "/share/home/huangli/anaconda3/etc/profile.d/conda.sh" ]; then
+  . "/share/home/huangli/anaconda3/etc/profile.d/conda.sh"
+else
+  export PATH="/share/home/huangli/anaconda3/bin:$PATH"
+fi
+
+# 3) 取消 TED 的 pip/pip3 alias，让 pip 跟随 conda env
+unalias pip 2>/dev/null
+unalias pip3 2>/dev/null
+hash -r
+
+# 4) 干净 conda: 跑 conda 管理命令更稳
+conda_clean() {
+  ( unset PYTHONPATH
+    export PYTHONNOUSERSITE=1
+    /share/home/huangli/anaconda3/bin/conda "$@" )
+}
