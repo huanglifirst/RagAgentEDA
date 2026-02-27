@@ -3,7 +3,6 @@ __pycache__/
 *.pyc
 .venv/
 venv/
-.env
 
 # Jupyter
 .ipynb_checkpoints/
@@ -33,3 +32,5 @@ models/
 *.pt
 *.pth
 *.onnx
+
+workdir/
