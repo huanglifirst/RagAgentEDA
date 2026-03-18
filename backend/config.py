@@ -15,7 +15,7 @@ def _load_env_file(path: Path = Path('.env')) -> None:
         key, value = raw.split('=', 1)
         key = key.strip()
         value = value.strip().strip('"').strip("'")
-        os.environ.setdefault(key, value)
+        os.environ[key] = value
 
 
 _load_env_file()
@@ -29,14 +29,27 @@ class Settings:
 
     # model settings from .env
     openai_api_base: str = os.getenv('OPENAI_API_BASE', 'https://ark.cn-beijing.volces.com/api/v3')
+    embedding_api_base: str = os.getenv('EMBEDDING_API_BASE', 'https://a.fe8.cn/v1')
     openai_api_key: str = os.getenv('OPENAI_API_KEY', '')
+    embedding_api_key: str = os.getenv('EMBEDDING_API_KEY', os.getenv('OPENAI_API_KEY', ''))
     model_name: str = os.getenv('MODEL_NAME', 'deepseek-v3-1-terminus')
-    embedding_model_text: str = os.getenv('EMBEDDING_MODEL_TEXT', 'doubao-embedding-large')
+    embedding_model_text: str = os.getenv('EMBEDDING_MODEL_TEXT', 'text-embedding-v4')
     embedding_model_vision: str = os.getenv('EMBEDDING_MODEL_VISION', 'doubao-embedding-vision')
+    embedding_batch_size: int = int(os.getenv('EMBEDDING_BATCH_SIZE', '10'))
+    embedding_retry_count: int = int(os.getenv('EMBEDDING_RETRY_COUNT', '4'))
+    embedding_retry_delay_sec: float = float(os.getenv('EMBEDDING_RETRY_DELAY_SEC', '1.0'))
+    rerank_enabled: bool = os.getenv('RERANK_ENABLED', 'true').strip().lower() in ('1', 'true', 'yes', 'on')
+    rerank_model_text: str = os.getenv('RERANK_MODEL_TEXT', 'qwen3-rerank')
+    rerank_api_base: str = os.getenv('RERANK_API_BASE', os.getenv('EMBEDDING_API_BASE', 'https://a.fe8.cn/v1'))
+    rerank_api_key: str = os.getenv('RERANK_API_KEY', os.getenv('EMBEDDING_API_KEY', os.getenv('OPENAI_API_KEY', '')))
+    rerank_topn_factor: int = int(os.getenv('RERANK_TOPN_FACTOR', '4'))
 
     # execution settings
     execution_mode: str = os.getenv('RAG_EXECUTION_MODE', 'local')  # local|ssh
     local_bashrc: str = os.getenv('RAG_LOCAL_BASHRC', '~/.bashrc')
+    remote_bashrc: str = os.getenv('RAG_REMOTE_BASHRC', '~/.bashrc')
+    ted_required_commands: str = os.getenv('RAG_TED_REQUIRED_COMMANDS', 'python')
+    ted_required_python_modules: str = os.getenv('RAG_TED_REQUIRED_PY_MODULES', '')
 
     ssh_host: str = os.getenv('RAG_SSH_HOST', '127.0.0.1')
     ssh_user: str = os.getenv('RAG_SSH_USER', '')

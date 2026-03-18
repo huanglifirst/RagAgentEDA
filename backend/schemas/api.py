@@ -8,6 +8,7 @@ class RunTaskRequest(BaseModel):
     query: str = Field(..., description="Natural language test requirement")
     circuit_description: Optional[str] = Field(default=None)
     top_k: int = Field(default=6, ge=1, le=20)
+    execute: bool = Field(default=True, description="Whether to execute the generated script")
 
 
 class EvidenceItem(BaseModel):
