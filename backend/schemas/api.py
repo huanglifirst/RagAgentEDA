@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, Field
 
 
@@ -15,6 +15,31 @@ class EvidenceItem(BaseModel):
     source: str
     score: float
     snippet: str
+
+
+class RagAskRequest(BaseModel):
+    question: str = Field(..., description="Natural language question for RAG QA")
+
+
+class QueryRewriteRequest(BaseModel):
+    query: str = Field(..., description="Natural language query to rewrite for TED retrieval")
+    scene: Literal["qa", "task"] = Field(default="qa", description="Rewrite scene")
+    mode: str = Field(default="conservative", description="Rewrite mode: conservative or aggressive")
+
+
+class RagAskResponse(BaseModel):
+    status: str
+    answer: str
+    evidence: List[EvidenceItem] = Field(default_factory=list)
+    warning: str = ""
+
+
+class QueryRewriteResponse(BaseModel):
+    original_query: str
+    rewritten_query: str
+    changed: bool
+    strategy: str
+    warning: str = ""
 
 
 class RunTaskResponse(BaseModel):

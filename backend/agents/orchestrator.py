@@ -7,6 +7,7 @@ from typing import Any, Dict, List, TypedDict
 from backend.agents.codegen import CodegenError, ScriptGenerator
 from backend.config import settings
 from backend.llm.client import OpenAICompatClient
+from backend.rag.evidence import expand_code_block_evidence
 from backend.rag.indexer import ResourceIndexer, Chunk
 from backend.rag.retriever import HybridRetriever, ScoredChunk
 from backend.rag.vector_store import EmbeddingRetriever, PersistentEmbeddingIndex
@@ -104,8 +105,10 @@ class RagLangGraphPipeline:
         fingerprint = self.indexer.fingerprint()
         rerank_top_n = max(20, req.top_k * max(1, settings.rerank_topn_factor))
 
-        # stage-1: embedding retrieval (fallback to lexical if api unavailable)
-        retrieval_warning = ''
+        # stage-1: candidate build (vector + lexical broad retrieval)
+        warning_parts: List[str] = []
+        vector_candidates: List[Chunk] = []
+        lexical_candidates: List[Chunk] = []
         try:
             emb = EmbeddingRetriever.from_chunks(
                 self.embedding_client,
@@ -115,13 +118,24 @@ class RagLangGraphPipeline:
                 fingerprint,
             )
             emb_hits = emb.search(req.query, top_k=rerank_top_n)
-            candidates = [h.chunk for h in emb_hits]
-            if not candidates:
-                candidates = chunks
-                retrieval_warning = 'embedding retrieval returned no hits; using lexical fallback'
+            vector_candidates = [h.chunk for h in emb_hits]
+            if not vector_candidates:
+                warning_parts.append('embedding retrieval returned no hits; using lexical supplement')
         except Exception as exc:  # noqa: BLE001
+            warning_parts.append(f'embedding retrieval unavailable: {exc}; using lexical supplement')
+
+        lexical_retriever = HybridRetriever(chunks)
+        lexical_candidates = [item.chunk for item in lexical_retriever.retrieve_broad(req.query, top_n=rerank_top_n)]
+        candidates = self._merge_candidates(
+            vector_candidates,
+            lexical_candidates,
+            limit=max(1, rerank_top_n) * 2,
+        )
+        if not candidates:
             candidates = chunks
-            retrieval_warning = f'embedding retrieval unavailable: {exc}; using lexical fallback'
+            warning_parts.append('candidate merge produced no hits; using full corpus')
+
+        retrieval_warning = '; '.join(part for part in warning_parts if part)
 
         # stage-2: rerank model (fallback to lexical rerank)
         reranked: List[ScoredChunk]
@@ -151,6 +165,7 @@ class RagLangGraphPipeline:
         else:
             hybrid = HybridRetriever(candidates)
             reranked = hybrid.retrieve(req.query, top_k=req.top_k)
+        reranked = expand_code_block_evidence(reranked, chunks)[:req.top_k]
         return {'chunks': chunks, 'evidence': reranked, 'retrieval_warning': retrieval_warning}
 
     def _codegen(self, state: AgentState) -> AgentState:
@@ -211,6 +226,24 @@ class RagLangGraphPipeline:
             'run_stderr': stderr,
             'run_error': out.error,
         }
+
+    @staticmethod
+    def _merge_candidates(
+        vector_candidates: List[Chunk],
+        lexical_candidates: List[Chunk],
+        limit: int,
+    ) -> List[Chunk]:
+        merged: List[Chunk] = []
+        seen: set[str] = set()
+        for chunk in vector_candidates + lexical_candidates:
+            cid = chunk.chunk_id
+            if cid in seen:
+                continue
+            seen.add(cid)
+            merged.append(chunk)
+            if len(merged) >= max(1, limit):
+                break
+        return merged
 
     @staticmethod
     def _csv_tuple(raw: str, default: tuple[str, ...] = ()) -> tuple[str, ...]:

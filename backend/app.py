@@ -3,11 +3,21 @@ from __future__ import annotations
 from fastapi import FastAPI, HTTPException
 
 from backend.agents.orchestrator import PipelineDeps, RagLangGraphPipeline
+from backend.agents.qa_agent import RagQaAgent
+from backend.agents.query_rewriter import QueryRewriter
 from backend.config import settings
 from backend.rag.indexer import ResourceIndexer
 from backend.rag.vector_store import EmbeddingRetriever
 from backend.runner.ssh_runner import SSHConfig
-from backend.schemas.api import RunTaskRequest, RunTaskResponse
+from backend.schemas.api import (
+    QueryRewriteRequest,
+    QueryRewriteResponse,
+    RagAskRequest,
+    RagAskResponse,
+    RunTaskRequest,
+    RunTaskResponse,
+)
+from backend.ui.gradio_ragagent import mount_ragagent_ui
 
 app = FastAPI(title='RagAgent EDA Demo', version='0.3.0')
 
@@ -33,6 +43,15 @@ pipeline = RagLangGraphPipeline(
     )
 )
 
+qa_agent = RagQaAgent(
+    indexer=pipeline.indexer,
+    chat_client=pipeline.chat_client,
+    embedding_client=pipeline.embedding_client,
+    rerank_client=pipeline.rerank_client,
+    vector_store=pipeline.vector_store,
+)
+query_rewriter = QueryRewriter(pipeline.chat_client, settings.model_name)
+
 
 @app.get('/health')
 def health() -> dict:
@@ -50,6 +69,8 @@ def health() -> dict:
         'rerank_model': settings.rerank_model_text,
         'rerank_api_base': settings.rerank_api_base,
         'rerank_api_key_set': bool(settings.rerank_api_key),
+        'rag_qa_timing_log': settings.rag_qa_timing_log,
+        'rag_qa_warmup_on_reindex': settings.rag_qa_warmup_on_reindex,
         'remote_bashrc': settings.remote_bashrc,
         'vector_index_dir': str(settings.vector_index_dir),
         'vector_index_latest': latest.read_text(encoding='utf-8').strip() if latest.exists() else None,
@@ -86,6 +107,15 @@ def reindex() -> dict:
                 'embedding build failed: invalid vector index '
                 f'(vector_count={vector_count}, chunk_count={chunk_count})'
             )
+        qa_agent.invalidate_cache()
+        qa_cache_warmed = False
+        qa_warmup_warning = ''
+        if settings.rag_qa_warmup_on_reindex:
+            try:
+                qa_agent.warmup()
+                qa_cache_warmed = True
+            except Exception as exc:  # noqa: BLE001
+                qa_warmup_warning = str(exc)
         return {
             'ok': True,
             'doc_count': len(docs),
@@ -94,6 +124,9 @@ def reindex() -> dict:
             'vector_count': vector_count,
             'saved_dir': str(settings.vector_index_dir),
             'saved_file': str(settings.vector_index_dir / f'{fingerprint}.json'),
+            'qa_cache_invalidated': True,
+            'qa_cache_warmed': qa_cache_warmed,
+            'qa_warmup_warning': qa_warmup_warning or None,
         }
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=str(exc)) from exc
@@ -105,3 +138,43 @@ def run_task(req: RunTaskRequest) -> RunTaskResponse:
         return pipeline.run(req)
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.post('/v1/query/rewrite', response_model=QueryRewriteResponse)
+def query_rewrite(req: QueryRewriteRequest) -> QueryRewriteResponse:
+    query = req.query.strip()
+    if not query:
+        raise HTTPException(status_code=400, detail='query is empty')
+    try:
+        result = query_rewriter.rewrite(query, scene=req.scene, mode=req.mode)
+        return QueryRewriteResponse(
+            original_query=result.original_query,
+            rewritten_query=result.rewritten_query,
+            changed=result.changed,
+            strategy=result.strategy,
+            warning=result.warning,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.post('/v1/rag/ask', response_model=RagAskResponse)
+def rag_ask(req: RagAskRequest) -> RagAskResponse:
+    question = req.question.strip()
+    if not question:
+        raise HTTPException(status_code=400, detail='question is empty')
+    try:
+        return qa_agent.ask(question)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+try:
+    app = mount_ragagent_ui(app, qa_agent, query_rewriter, path='/ragagent')
+except ModuleNotFoundError:
+    # Gradio is optional at runtime until requirements are installed.
+    pass

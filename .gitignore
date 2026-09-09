@@ -34,3 +34,9 @@ models/
 *.onnx
 
 workdir/
+
+# Local configuration and source archive
+.env
+.env.*
+!.env.example
+/backend.zip

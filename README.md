@@ -18,10 +18,11 @@
    - 文件类型：`md/markdown/html/htm/txt`
    - HTML：正文抽取 + 模板噪声过滤 + 标题层级分段
    - 切块：heading 感知分段后滑窗切块，`size=1200`、`overlap=200`
+   - 代码块：长 fenced code block 仍按小块向量化；命中分片后按 `block_id` 合并为完整代码块用于 Evidence/QA
    - 过滤：长度 `<50` 的片段不入索引
 
 ## API Base 配置（OpenAI兼容）
-- Chat/Base（用于 `MODEL_NAME`，如 `deepseek-v3-1-terminus`）: `OPENAI_API_BASE=https://ark.cn-beijing.volces.com/api/v3`
+- Chat/Base（用于 `MODEL_NAME`，如 `deepseek-v4-pro`）: `OPENAI_API_BASE=https://a.fe8.cn/v1`
 - Embedding/Base（用于 `EMBEDDING_MODEL_TEXT`）: `EMBEDDING_API_BASE=https://a.fe8.cn/v1`
 - Chat/Key: `OPENAI_API_KEY=...`
 - Embedding/Key: `EMBEDDING_API_KEY=...`（未设置时回退到 `OPENAI_API_KEY`）
@@ -59,9 +60,32 @@
   - 再执行 `test_api.py` 或 `/v1/rag/reindex` 验证连通性
 
 ## 启动
+先复制 `.env.example` 为 `.env`，填写自己的 API 密钥和运行配置。`.env` 仅保存在本机，不提交到 Git。
+
 ```bash
 pip install -r requirements.txt
 uvicorn backend.app:app --host 0.0.0.0 --port 8000
+```
+
+也可以用仓库脚本启动：
+```bash
+# Windows (cmd)
+scripts\start_server.bat
+
+# Linux / macOS
+bash scripts/start_server.sh
+```
+
+## 前端入口与接口文档
+- Gradio 前端入口：`GET /ragagent`
+- Swagger 文档：`GET /docs`
+- 健康检查：`GET /health`
+
+本机访问：
+```bash
+http://127.0.0.1:8000/ragagent
+http://127.0.0.1:8000/docs
+http://127.0.0.1:8000/health
 ```
 
 ## 健康检查
@@ -78,6 +102,15 @@ curl http://127.0.0.1:8000/health
 ## 手工重建向量索引
 ```bash
 curl -X POST 'http://127.0.0.1:8000/v1/rag/reindex'
+```
+
+也可以用仓库脚本重建：
+```bash
+# Windows (cmd)
+scripts\reindex.bat
+
+# Linux / macOS
+bash scripts/reindex.sh
 ```
 
 返回中会包含：
@@ -135,3 +168,27 @@ python workdir/run_retrieval_regression.py
 - 核心用例：必须全部 PASS
 - 扩展用例：至少 1 条 PASS
 - 若出现 `embedding retrieval unavailable` 或 `using lexical fallback`，会被判为检索路径降级
+
+## 内网部署与同事访问前端
+1. 在内网机器拉起服务（必须使用 `--host 0.0.0.0`）：
+   ```bash
+   python -m uvicorn backend.app:app --host 0.0.0.0 --port 8000
+   ```
+2. 放通内网机器入站端口 `8000/TCP`（或你实际使用的端口）。
+3. 在服务机器打印可分享地址：
+   ```bash
+   python scripts/print_access_urls.py --port 8000
+   ```
+4. 内网同事浏览器访问：
+   - `http://<内网机IP>:8000/ragagent`（前端）
+   - `http://<内网机IP>:8000/docs`（API 文档）
+
+## 启动后验收脚本
+```bash
+python scripts/smoke_check.py --base-url http://127.0.0.1:8000
+```
+
+该脚本会校验：
+- `/health` 返回 `ok=true`
+- `/v1/rag/reindex` 返回 `chunk_count > 0`
+- `/v1/rag/reindex` 返回 `vector_count == chunk_count`

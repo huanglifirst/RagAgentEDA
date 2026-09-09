@@ -28,6 +28,11 @@ class HybridRetriever:
         reranked = self._focused_rerank(query, broad)
         return reranked[:top_k]
 
+    def retrieve_broad(self, query: str, top_n: int = 30) -> List[ScoredChunk]:
+        """Return lexical broad-retrieval candidates before focused rerank."""
+        q_tokens = self._tokens(query)
+        return self._broad_retrieval(q_tokens, top_n=max(1, top_n))
+
     def _broad_retrieval(self, q_tokens: List[str], top_n: int) -> List[ScoredChunk]:
         results: List[ScoredChunk] = []
         q_set = set(q_tokens)

@@ -26,13 +26,14 @@ class Settings:
     resource_dir: Path = Path(os.getenv('RAG_RESOURCE_DIR', 'Resource'))
     work_dir: Path = Path(os.getenv('RAG_WORK_DIR', './workdir'))
     vector_index_dir: Path = Path(os.getenv('RAG_VECTOR_INDEX_DIR', './workdir/vector_index'))
+    rag_qa_feedback_db: Path = Path(os.getenv('RAG_QA_FEEDBACK_DB', './workdir/qa_feedback.db'))
 
     # model settings from .env
-    openai_api_base: str = os.getenv('OPENAI_API_BASE', 'https://ark.cn-beijing.volces.com/api/v3')
+    openai_api_base: str = os.getenv('OPENAI_API_BASE', os.getenv('RERANK_API_BASE', os.getenv('EMBEDDING_API_BASE', 'https://a.fe8.cn/v1')))
     embedding_api_base: str = os.getenv('EMBEDDING_API_BASE', 'https://a.fe8.cn/v1')
-    openai_api_key: str = os.getenv('OPENAI_API_KEY', '')
+    openai_api_key: str = os.getenv('OPENAI_API_KEY', os.getenv('RERANK_API_KEY', os.getenv('EMBEDDING_API_KEY', '')))
     embedding_api_key: str = os.getenv('EMBEDDING_API_KEY', os.getenv('OPENAI_API_KEY', ''))
-    model_name: str = os.getenv('MODEL_NAME', 'deepseek-v3-1-terminus')
+    model_name: str = os.getenv('MODEL_NAME', 'deepseek-v4-pro')
     embedding_model_text: str = os.getenv('EMBEDDING_MODEL_TEXT', 'text-embedding-v4')
     embedding_model_vision: str = os.getenv('EMBEDDING_MODEL_VISION', 'doubao-embedding-vision')
     embedding_batch_size: int = int(os.getenv('EMBEDDING_BATCH_SIZE', '10'))
@@ -43,6 +44,18 @@ class Settings:
     rerank_api_base: str = os.getenv('RERANK_API_BASE', os.getenv('EMBEDDING_API_BASE', 'https://a.fe8.cn/v1'))
     rerank_api_key: str = os.getenv('RERANK_API_KEY', os.getenv('EMBEDDING_API_KEY', os.getenv('OPENAI_API_KEY', '')))
     rerank_topn_factor: int = int(os.getenv('RERANK_TOPN_FACTOR', '4'))
+    rag_qa_timing_log: bool = os.getenv('RAG_QA_TIMING_LOG', 'true').strip().lower() in (
+        '1',
+        'true',
+        'yes',
+        'on',
+    )
+    rag_qa_warmup_on_reindex: bool = os.getenv('RAG_QA_WARMUP_ON_REINDEX', 'true').strip().lower() in (
+        '1',
+        'true',
+        'yes',
+        'on',
+    )
 
     # execution settings
     execution_mode: str = os.getenv('RAG_EXECUTION_MODE', 'local')  # local|ssh
