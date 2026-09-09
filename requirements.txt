@@ -3,3 +3,6 @@ uvicorn==0.35.0
 pydantic==2.11.7
 langgraph==0.2.40
 gradio==4.44.1
+
+# Gradio 4 imports HfFolder, removed in huggingface-hub 1.x.
+huggingface-hub>=0.19.3,<1.0

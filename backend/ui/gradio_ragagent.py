@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 import json
 from html import escape
+from pathlib import Path
 import os
 import re
 from typing import Any, List, Tuple
@@ -17,807 +18,33 @@ from backend.storage import QaFeedbackStore
 
 os.environ.setdefault("GRADIO_ANALYTICS_ENABLED", "False")
 
-_CSS = """
-body, .gradio-container {
-  background: #f6f7fb !important;
-  color: #111827 !important;
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif !important;
-}
-.gradio-container {
-  max-width: none !important;
-}
-.status-badge {
-  display: inline-block;
-  padding: 3px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 600;
-  border: 1px solid #d1d5db;
-  background: #f3f4f6;
-  color: #1f2937;
-}
-.status-answered { border-color: #c7f0d8; background: #ecfdf3; color: #116149; }
-.status-not-found { border-color: #fcd9aa; background: #fff7ed; color: #9a3412; }
-.status-error { border-color: #fecaca; background: #fef2f2; color: #991b1b; }
-.card {
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  background: #ffffff;
-  padding: 12px;
-}
-.section-title {
-  margin: 4px 0 8px;
-  font-size: 28px;
-  font-weight: 700;
-  color: #111827;
-}
-.evidence-title {
-  margin: 14px 0 10px;
-  font-size: 18px;
-  font-weight: 700;
-  color: #111827;
-}
-.evidence-item {
-  margin-top: 12px;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  background: #ffffff;
-}
-.evidence-summary {
-  list-style: none;
-  cursor: pointer;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  padding: 12px;
-  color: #111827;
-  user-select: none;
-}
-.evidence-summary:hover {
-  background: #f8fafc;
-}
-.evidence-summary::-webkit-details-marker {
-  display: none;
-}
-.evidence-summary::marker {
-  content: "";
-}
-.evidence-summary::before {
-  content: "▸";
-  color: #64748b;
-  font-size: 12px;
-  transform-origin: center;
-  transition: transform 0.15s ease;
-}
-.evidence-item[open] .evidence-summary::before {
-  transform: rotate(90deg);
-}
-.evidence-item[open] .evidence-summary {
-  border-bottom: 1px solid #e5e7eb;
-}
-.evidence-content {
-  padding: 12px;
-}
-.meta-line {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 10px;
-  color: #111827;
-}
-.chip {
-  display: inline-block;
-  max-width: 100%;
-  padding: 2px 8px;
-  border-radius: 6px;
-  border: 1px solid #d1d5db;
-  background: #f8fafc;
-  color: #1f2937;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-  font-size: 12px;
-  overflow-wrap: anywhere;
-}
-.snippet-block {
-  margin: 0;
-  white-space: pre-wrap;
-  overflow-x: auto;
-  padding: 12px;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
-  background: #f8fafc;
-  color: #0f172a;
-  font-size: 14px;
-  line-height: 1.55;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-}
-.answer-md {
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  background: #ffffff;
-  padding: 12px 14px;
-}
-.answer-md :is(h1, h2, h3, h4) {
-  margin: 10px 0 8px;
-  color: #111827;
-}
-.answer-md :is(p, ul, ol) {
-  margin: 8px 0;
-}
-.answer-md code {
-  background: #f3f4f6;
-  border: 1px solid #e5e7eb;
-  border-radius: 6px;
-  padding: 0 4px;
-}
-.answer-md pre code {
-  display: block;
-  white-space: pre-wrap;
-  padding: 10px 12px;
-  border-radius: 8px;
-}
-.snippet-container {
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  background: #f8fafc;
-  padding: 10px 12px;
-}
-.snippet-text {
-  white-space: pre-wrap;
-  color: #111827;
-  font-size: 14px;
-  line-height: 1.6;
-}
-.snippet-table-wrap {
-  overflow-x: auto;
-}
-.snippet-table {
-  width: 100%;
-  border-collapse: collapse;
-  background: #ffffff;
-  color: #111827;
-  font-size: 13px;
-  line-height: 1.5;
-}
-.snippet-table th,
-.snippet-table td {
-  border: 1px solid #d1d5db;
-  padding: 6px 8px;
-  text-align: left;
-  vertical-align: top;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-.snippet-table thead th {
-  background: #f1f5f9;
-  font-weight: 600;
-}
-.snippet-code {
-  margin: 0;
-  white-space: pre;
-  overflow-x: auto;
-  overflow-y: hidden;
-  overflow-wrap: normal;
-  word-break: normal;
-  background: #eef2f7;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  padding: 10px 12px;
-  color: #0f172a;
-  font-size: 14px;
-  line-height: 1.55;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-}
-.snippet-sep {
-  height: 10px;
-}
-.warning {
-  border: 1px solid #f7d9a2;
-  background: #fff9ed;
-  color: #8a4a03;
-  border-radius: 8px;
-  padding: 10px 12px;
-  margin-bottom: 12px;
-}
-
-/* RagAgent professional workbench redesign */
-:root {
-  --ra-bg: #eef3f2;
-  --ra-bg-soft: #f8faf9;
-  --ra-surface: #ffffff;
-  --ra-surface-raised: rgba(255, 255, 255, 0.94);
-  --ra-ink: #17201f;
-  --ra-muted: #667370;
-  --ra-line: #d9e2df;
-  --ra-line-strong: #bccbc7;
-  --ra-accent: #0f766e;
-  --ra-accent-2: #2563eb;
-  --ra-success: #147c4f;
-  --ra-warning: #a25b10;
-  --ra-danger: #b42318;
-  --ra-radius: 8px;
-  --ra-radius-sm: 6px;
-  --ra-shadow: 0 18px 42px rgba(31, 48, 45, 0.11);
-  --ra-shadow-soft: 0 8px 22px rgba(31, 48, 45, 0.07);
-}
-
-body,
-.gradio-container {
-  background:
-    linear-gradient(120deg, rgba(15, 118, 110, 0.09), transparent 34%),
-    linear-gradient(270deg, rgba(37, 99, 235, 0.08), transparent 30%),
-    var(--ra-bg) !important;
-  color: var(--ra-ink) !important;
-  font-family: "Aptos", "Segoe UI", "Microsoft YaHei UI", "Helvetica Neue", Arial, sans-serif !important;
-}
-
-html,
-body {
-  width: 100% !important;
-  min-height: 100vh !important;
-  margin: 0 !important;
-  overflow-x: hidden;
-}
-
-.gradio-container {
-  width: 100% !important;
-  max-width: none !important;
-  min-height: 100vh !important;
-  padding: clamp(14px, 1.25vw, 24px) !important;
-  box-sizing: border-box !important;
-}
-
-.gradio-container .contain,
-.gradio-container .wrap,
-.gradio-container main {
-  width: 100% !important;
-  max-width: none !important;
-}
-
-.gradio-container footer {
-  display: none !important;
-}
-
-.app-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin: 0 0 16px;
-  padding: 16px 18px;
-  border: 1px solid var(--ra-line);
-  border-radius: var(--ra-radius);
-  background: rgba(255, 255, 255, 0.86);
-  box-shadow: var(--ra-shadow-soft);
-  backdrop-filter: blur(10px);
-}
-
-.app-kicker,
-.panel-kicker {
-  color: var(--ra-accent);
-  font-size: 12px;
-  font-weight: 760;
-  letter-spacing: 0;
-  text-transform: uppercase;
-}
-
-.app-title {
-  margin-top: 3px;
-  color: var(--ra-ink);
-  font-size: 26px;
-  line-height: 1.15;
-  font-weight: 780;
-}
-
-.app-status {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-.runtime-pill,
-.route-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  min-height: 30px;
-  padding: 5px 10px;
-  border: 1px solid var(--ra-line);
-  border-radius: 999px;
-  background: var(--ra-bg-soft);
-  color: var(--ra-muted);
-  font-size: 12px;
-  font-weight: 680;
-}
-
-.runtime-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  background: var(--ra-success);
-  box-shadow: 0 0 0 4px rgba(20, 124, 79, 0.12);
-}
-
-.workspace-layout {
-  align-items: stretch !important;
-  gap: 16px !important;
-  min-height: calc(100vh - 138px);
-}
-
-.workspace-panel {
-  min-width: 0 !important;
-  padding: 16px;
-  border: 1px solid var(--ra-line);
-  border-radius: var(--ra-radius);
-  background: var(--ra-surface-raised);
-  box-shadow: var(--ra-shadow);
-}
-
-.query-console {
-  border-left: 4px solid var(--ra-accent);
-}
-
-.result-console {
-  border-left: 4px solid var(--ra-accent-2);
-}
-
-.panel-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.panel-title {
-  margin-top: 2px;
-  color: var(--ra-ink);
-  font-size: 18px;
-  line-height: 1.2;
-  font-weight: 760;
-}
-
-.panel-tag {
-  flex: 0 0 auto;
-  padding: 4px 8px;
-  border: 1px solid var(--ra-line);
-  border-radius: 999px;
-  background: #f2f7f6;
-  color: var(--ra-muted);
-  font-size: 12px;
-  font-weight: 650;
-}
-
-.action-row {
-  gap: 10px !important;
-}
-
-.gradio-container textarea,
-.gradio-container input,
-.gradio-container select {
-  border-color: var(--ra-line) !important;
-  border-radius: var(--ra-radius-sm) !important;
-  background: #fbfdfc !important;
-  color: var(--ra-ink) !important;
-}
-
-.gradio-container textarea:focus,
-.gradio-container input:focus {
-  border-color: var(--ra-accent) !important;
-  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.13) !important;
-}
-
-.gradio-container input[type="radio"],
-.gradio-container input[type="checkbox"] {
-  position: relative;
-  width: 18px !important;
-  height: 18px !important;
-  border: 1px solid var(--ra-line-strong) !important;
-  background: #ffffff !important;
-  accent-color: var(--ra-accent) !important;
-}
-
-.gradio-container input[type="radio"]:checked,
-.gradio-container input[type="checkbox"]:checked {
-  border-color: var(--ra-accent) !important;
-  background:
-    radial-gradient(circle at center, var(--ra-accent) 0 42%, transparent 46%) !important;
-}
-
-.gradio-container label:has(input[type="radio"]:checked),
-.gradio-container label:has(input[type="checkbox"]:checked) {
-  border-color: var(--ra-accent) !important;
-  background: #e7f4f2 !important;
-  color: var(--ra-ink) !important;
-  box-shadow: inset 0 0 0 1px rgba(15, 118, 110, 0.18), 0 8px 18px rgba(15, 118, 110, 0.10) !important;
-}
-
-.gradio-container label:has(input[type="radio"]:checked) *,
-.gradio-container label:has(input[type="checkbox"]:checked) * {
-  color: var(--ra-ink) !important;
-}
-
-.gradio-container button {
-  border-radius: var(--ra-radius-sm) !important;
-  font-weight: 720 !important;
-  transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease, background 0.12s ease;
-}
-
-.gradio-container button:hover {
-  transform: translateY(-1px);
-}
-
-.gradio-container .primary-action button,
-.gradio-container button.primary-action {
-  border-color: transparent !important;
-  background: linear-gradient(135deg, var(--ra-accent), var(--ra-accent-2)) !important;
-  color: #ffffff !important;
-  box-shadow: 0 10px 20px rgba(15, 118, 110, 0.20);
-}
-
-.gradio-container .secondary-action button,
-.gradio-container button.secondary-action {
-  border-color: var(--ra-line-strong) !important;
-  background: #ffffff !important;
-  color: var(--ra-ink) !important;
-}
-
-.feedback-row {
-  gap: 10px !important;
-}
-
-.feedback-row button {
-  min-width: 104px;
-}
-
-.card,
-.warning,
-.answer-md,
-.evidence-item,
-.snippet-container,
-.snippet-code {
-  border-radius: var(--ra-radius) !important;
-}
-
-.card {
-  border-color: var(--ra-line);
-  background: #f9fbfb;
-  color: var(--ra-ink);
-  box-shadow: none;
-}
-
-.warning {
-  border-color: #f1c27b;
-  background: #fff6e8;
-  color: var(--ra-warning);
-}
-
-.status-badge {
-  padding: 5px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  letter-spacing: 0;
-  text-transform: uppercase;
-}
-
-.status-answered {
-  border-color: rgba(20, 124, 79, 0.22);
-  background: #eaf7f0;
-  color: var(--ra-success);
-}
-
-.status-not-found {
-  border-color: rgba(162, 91, 16, 0.22);
-  background: #fff4e5;
-  color: var(--ra-warning);
-}
-
-.status-error {
-  border-color: rgba(180, 35, 24, 0.22);
-  background: #fff0ee;
-  color: var(--ra-danger);
-}
-
-.answer-md {
-  min-height: 210px;
-  border-color: var(--ra-line);
-  background: #ffffff;
-  color: var(--ra-ink);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
-}
-
-.answer-md :is(h1, h2, h3, h4) {
-  color: var(--ra-ink);
-}
-
-.answer-md code {
-  border-color: var(--ra-line);
-  background: #eef5f4;
-}
-
-.evidence-title {
-  margin: 18px 0 10px;
-  color: var(--ra-ink);
-  font-size: 18px;
-  line-height: 1.2;
-  font-weight: 760;
-}
-
-.evidence-item {
-  overflow: hidden;
-  border-color: var(--ra-line);
-  background: #ffffff;
-  box-shadow: var(--ra-shadow-soft);
-}
-
-.evidence-summary {
-  display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr) auto;
-  gap: 10px;
-  align-items: center;
-  padding: 12px 14px;
-  color: var(--ra-ink);
-}
-
-.evidence-summary:hover {
-  background: #f4f8f7;
-}
-
-.evidence-summary::before {
-  content: ">";
-  width: 18px;
-  height: 18px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--ra-line);
-  border-radius: 999px;
-  color: var(--ra-accent);
-  font-size: 11px;
-  font-weight: 800;
-}
-
-.evidence-index {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 999px;
-  background: #e7f4f2;
-  color: var(--ra-accent);
-  font-size: 12px;
-  font-weight: 780;
-}
-
-.evidence-source {
-  min-width: 0;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-
-.evidence-source-label {
-  color: var(--ra-muted);
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-}
-
-.chip {
-  border-color: var(--ra-line);
-  background: #f4f8f7;
-  color: #20302e;
-}
-
-.source-chip {
-  min-width: 0;
-  flex: 1 1 220px;
-}
-
-.score-chip {
-  background: #edf4ff;
-  color: #1d4ed8;
-}
-
-.history-card {
-  margin-top: 14px;
-  border: 1px solid var(--ra-line);
-  border-radius: var(--ra-radius);
-  background:
-    linear-gradient(180deg, rgba(248, 252, 251, 0.96), rgba(255, 255, 255, 0.98));
-  padding: 12px 12px 10px;
-  box-shadow: var(--ra-shadow-soft);
-}
-
-.history-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-
-.history-title {
-  color: var(--ra-ink);
-  font-size: 15px;
-  font-weight: 760;
-}
-
-.history-refresh button {
-  min-width: 58px !important;
-  min-height: 30px !important;
-  padding: 4px 12px !important;
-  border-radius: 999px !important;
-  border-color: var(--ra-line) !important;
-  background: #f7fbfa !important;
-  color: var(--ra-accent) !important;
-  font-size: 12px !important;
-  box-shadow: none !important;
-}
-
-.history-refresh button:hover {
-  background: #e7f4f2 !important;
-  border-color: rgba(15, 118, 110, 0.36) !important;
-}
-
-.history-list {
-  margin-top: 2px;
-}
-
-.history-list .wrap {
-  max-height: 220px;
-  overflow-y: auto;
-  overflow-x: hidden;
-  display: flex;
-  flex-direction: column;
-  flex-wrap: nowrap;
-  gap: 6px;
-  padding-right: 2px;
-}
-
-.history-list .wrap > div {
-  width: 100% !important;
-  display: flex !important;
-  flex-direction: column !important;
-  flex-wrap: nowrap !important;
-  gap: 6px !important;
-}
-
-.history-list .wrap::-webkit-scrollbar {
-  width: 6px;
-}
-
-.history-list .wrap::-webkit-scrollbar-thumb {
-  background: #c9d7d3;
-  border-radius: 999px;
-}
-
-.history-list label {
-  width: 100% !important;
-  max-width: 100% !important;
-  margin: 0 !important;
-  padding: 8px 10px !important;
-  border: 1px solid var(--ra-line) !important;
-  border-radius: var(--ra-radius-sm) !important;
-  background: #ffffff !important;
-  color: var(--ra-ink) !important;
-  box-shadow: none !important;
-  transition: background 0.12s ease, border-color 0.12s ease, transform 0.12s ease;
-}
-
-.history-list label:hover {
-  transform: translateY(-1px);
-  border-color: rgba(15, 118, 110, 0.30) !important;
-  background: #f4f8f7 !important;
-}
-
-.history-list label:has(input[type="radio"]:checked) {
-  border-color: var(--ra-accent) !important;
-  background: #e7f4f2 !important;
-  box-shadow: inset 3px 0 0 var(--ra-accent) !important;
-}
-
-.history-list input[type="radio"] {
-  margin-top: 2px !important;
-}
-
-.history-list span,
-.history-list p {
-  min-width: 0;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  line-height: 1.35;
-  font-size: 13px;
-}
-
-.history-note {
-  margin-top: 9px;
-  color: var(--ra-muted);
-  font-size: 12px;
-  line-height: 1.45;
-}
-
-.evidence-content {
-  padding: 14px;
-  background: #fbfdfc;
-}
-
-.snippet-container {
-  border-color: var(--ra-line);
-  background: #f7fbfa;
-}
-
-.snippet-text {
-  color: var(--ra-ink);
-}
-
-.snippet-code {
-  max-width: 100%;
-  border-color: var(--ra-line);
-  background: #f4f8f7;
-  color: #17201f;
-}
-
-.snippet-code code {
-  background: transparent !important;
-  border: 0 !important;
-  color: #17201f !important;
-  text-shadow: none !important;
-}
-
-.snippet-table {
-  background: #ffffff;
-}
-
-.snippet-table thead th {
-  background: #edf5f3;
-}
-
-@media (max-width: 900px) {
-  .gradio-container {
-    padding: 12px !important;
-  }
-
-  .app-header,
-  .panel-head {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .app-status {
-    justify-content: flex-start;
-  }
-
-  .workspace-layout {
-    flex-direction: column !important;
-  }
-
-  .workspace-layout > div {
-    min-width: 0 !important;
-    width: 100% !important;
-  }
-
-  .workspace-panel {
-    padding: 13px;
-  }
-
-  .evidence-summary {
-    grid-template-columns: auto auto minmax(0, 1fr);
-  }
-
-  .score-chip {
-    grid-column: 3;
-    width: fit-content;
+_CSS = Path(__file__).with_name("workbench.css").read_text(encoding="utf-8")
+
+_EMPTY_ANSWER = """
+<div class="answer-welcome">
+  <div class="welcome-symbol" aria-hidden="true"><span></span><span></span><span></span></div>
+  <div class="welcome-eyebrow">FROM DOCUMENTS TO ANSWERS</div>
+  <h3>让每个答案，都有据可循。</h3>
+  <p>从左侧输入一个问题，或选择示例开始。<br>在这里阅读回答，并展开原文核对细节。</p>
+  <div class="welcome-steps"><span>01&nbsp; 提出问题</span><i>→</i><span>02&nbsp; 检索文档</span><i>→</i><span>03&nbsp; 查看依据</span></div>
+</div>
+"""
+_SCROLL_TO_ANSWER_JS = """
+() => {
+  if (window.matchMedia("(max-width: 800px)").matches) {
+    document.getElementById("answer-status")?.scrollIntoView({
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
+      block: "start"
+    });
   }
 }
 """
+_EXAMPLE_QUESTIONS = [
+    "如何使用 TED 配置瞬态仿真？",
+    "如何测量运放的带宽？",
+    "TED 中如何设置电压源的参数？",
+]
+
 
 
 def _status_badge(status: str) -> str:
@@ -829,7 +56,7 @@ def _status_badge(status: str) -> str:
         klass += " status-not-found"
     elif raw == "error":
         klass += " status-error"
-    value = escape(raw)
+    value = escape({"answered": "已生成回答", "not_found": "未找到相关依据", "error": "暂时无法回答"}.get(raw, raw))
     return f'<span class="{klass}">{value}</span>'
 
 
@@ -872,17 +99,17 @@ def _rewrite_mode_key(label: str) -> str:
 
 def _rewrite_status_html(strategy: str = "", warning: str = "", mode: str = "") -> str:
     if not strategy and not warning:
-        return '<div class="card">点击 Rewrite 生成检索增强式候选 query，不会覆盖原始输入。</div>'
+        return '<div class="card">可选步骤：优化问题表达后再提问，也可以直接使用原始问题。</div>'
 
     mode_label = _REWRITE_MODE_KEY_TO_LABEL.get(mode, "")
     strategy_map = {
-        "pass_through_precise": "原 query 已足够精确，直接保留原文。",
-        "llm_rewrite": "已生成检索增强式 rewrite 候选，可继续手动编辑。",
-        "fallback_original": "rewrite 未生成可用候选，已回退为原 query。",
+        "pass_through_precise": "原始问题已足够明确，已保留原文。",
+        "llm_rewrite": "已生成改写建议，可以继续编辑后提问。",
+        "fallback_original": "暂未生成可用建议，已保留原始问题。",
         "legacy_rewrite": "历史记录来自旧版 rewrite，原始 rewrite 元数据不可恢复。",
     }
     if strategy == "llm_rewrite" and mode_label:
-        primary = f"已生成{mode_label} rewrite 候选，可继续手动编辑。"
+        primary = f"已生成{mode_label}改写建议，可以继续编辑后提问。"
     else:
         primary = strategy_map.get(strategy, strategy or "rewrite 已处理。")
     html = f'<div class="card">{escape(primary)}</div>'
@@ -1322,12 +549,12 @@ def _gentle_reflow_code_block(text: str) -> str:
 
 def _render_evidence(evidence: List[EvidenceItem]) -> str:
     if not evidence:
-        return '<div class="card empty-card">No evidence returned.</div>'
+        return '<div class="card empty-card">暂无可展示的引用片段。可以补充函数名、参数或具体任务后提问。</div>'
 
     html_items: List[str] = []
     for idx, item in enumerate(evidence, 1):
         source = escape(item.source)
-        score = f"{item.score:.6f}"
+        score = f"{item.score:.3f}"
         details_open_attr = " open" if idx == 1 else ""
         snippet_blocks = _split_snippet_blocks(item.snippet)
         snippet_html_parts: List[str] = []
@@ -1357,10 +584,10 @@ def _render_evidence(evidence: List[EvidenceItem]) -> str:
                 '<summary class="evidence-summary">'
                 f'<span class="evidence-index">{idx}</span>'
                 '<span class="evidence-source">'
-                '<span class="evidence-source-label">source</span>'
+                '<span class="evidence-source-label">文档来源</span>'
                 f'<span class="chip source-chip">{source}</span>'
                 '</span>'
-                f'<span class="chip score-chip">score {score}</span>'
+                f'<span class="chip score-chip">相关度 {score}</span>'
                 '</summary>'
                 f'<div class="evidence-content">{snippet_html}</div>'
                 '</details>'
@@ -1440,7 +667,7 @@ def build_ragagent_ui(qa_agent: RagQaAgent, query_rewriter: QueryRewriter):
     def _feedback_hint_html(record_id: int | None) -> str:
         if record_id is None:
             return '<div class="warning">问答已返回，但评价记录写入失败，请检查 SQLite 权限或路径。</div>'
-        return '<div class="card">请点击“有用”或“无用”提交评价（可改选，最后一次覆盖之前评价）。</div>'
+        return '<div class="feedback-note">这次回答有帮助吗？评价可以随时修改。</div>'
 
     def _history_label(row: dict[str, Any]) -> str:
         created_at = str(row.get("created_at") or "")
@@ -1449,7 +676,8 @@ def build_ragagent_ui(qa_agent: RagQaAgent, query_rewriter: QueryRewriter):
             created = dt.strftime("%m-%d %H:%M")
         except Exception:
             created = created_at[:16] or "unknown time"
-        status = str(row.get("status") or "unknown")
+        raw_status = str(row.get("status") or "unknown")
+        status = {"answered": "已回答", "not_found": "无依据", "error": "未完成"}.get(raw_status, raw_status)
         question_text = str(row.get("original_question") or row.get("question") or "").replace("\n", " ").strip()
         if len(question_text) > 40:
             question_text = question_text[:40].rstrip() + "..."
@@ -1465,7 +693,7 @@ def build_ragagent_ui(qa_agent: RagQaAgent, query_rewriter: QueryRewriter):
             values = {value for _, value in choices}
             selected = str(selected_record_id) if selected_record_id is not None else None
             value = selected if selected in values else None
-            note = f"最近 {len(choices)} 条，仅当前浏览器。"
+            note = f"最近 {len(choices)} 条 · 当前浏览器的记录" if choices else "还没有对话。第一次提问后，记录会保存在这里。"
             return gr.update(choices=choices, value=value), f'<div class="history-note">{escape(note)}</div>'
         except Exception as exc:  # noqa: BLE001
             return gr.update(choices=[], value=None), f'<div class="warning">历史记录加载失败：{escape(str(exc))}</div>'
@@ -1524,7 +752,7 @@ def build_ragagent_ui(qa_agent: RagQaAgent, query_rewriter: QueryRewriter):
                     gr.update(),
                     gr.update(value='<div class="warning">历史记录不存在或不属于当前浏览器。</div>', visible=True),
                     _status_badge("error"),
-                    "_(empty)_",
+                    "暂无回答内容。",
                     _render_evidence([]),
                     None,
                     '<div class="warning">历史记录读取失败。</div>',
@@ -1552,7 +780,7 @@ def build_ragagent_ui(qa_agent: RagQaAgent, query_rewriter: QueryRewriter):
                 gr.update(value=rewrite_mode_label),
                 gr.update(value=_warning_html(warning), visible=bool(warning)),
                 _status_badge(str(row.get("status") or "unknown")),
-                answer if answer.strip() else "_(empty)_",
+                answer if answer.strip() else "暂无回答内容。",
                 _render_evidence(evidence),
                 int(row["id"]),
                 _feedback_hint_html(int(row["id"])),
@@ -1569,7 +797,7 @@ def build_ragagent_ui(qa_agent: RagQaAgent, query_rewriter: QueryRewriter):
                 gr.update(),
                 gr.update(value=f'<div class="warning">历史记录读取失败：{escape(str(exc))}</div>', visible=True),
                 _status_badge("error"),
-                "_(empty)_",
+                "暂无回答内容。",
                 _render_evidence([]),
                 None,
                 '<div class="warning">历史记录读取失败。</div>',
@@ -1587,102 +815,87 @@ def build_ragagent_ui(qa_agent: RagQaAgent, query_rewriter: QueryRewriter):
         except Exception as exc:  # noqa: BLE001
             return f'<div class="warning">评价失败：{escape(str(exc))}</div>'
 
-    with gr.Blocks(css=_CSS, title="TED文档问答助手", theme=gr.themes.Soft()) as demo:
-
+    theme = gr.themes.Base(
+        primary_hue="emerald", neutral_hue="slate",
+        font=["Aptos", "Microsoft YaHei UI", "sans-serif"],
+        font_mono=["Cascadia Code", "Consolas", "monospace"],
+    ).set(
+        body_background_fill="#f4f5f1", body_background_fill_dark="#f4f5f1",
+        body_text_color="#20332e", body_text_color_dark="#20332e",
+        block_background_fill="#ffffff", block_background_fill_dark="#ffffff",
+        block_border_color="#dfe5df", block_border_color_dark="#dfe5df",
+        input_background_fill="#f8faf7", input_background_fill_dark="#f8faf7",
+        input_border_color="#dfe5df", input_border_color_dark="#dfe5df",
+        button_primary_background_fill="#1e5946", button_primary_background_fill_dark="#1e5946",
+        button_primary_text_color="#ffffff", button_primary_text_color_dark="#ffffff",
+    )
+    with gr.Blocks(css=_CSS, title="RagAgent EDA · 文档工作台", theme=theme) as demo:
         gr.HTML(
             """
-            <div class="app-header">
-              <div>
-                <div class="app-kicker">RagAgent EDA</div>
-                <div class="app-title">TED文档问答助手</div>
+            <header class="app-header">
+              <div class="brand"><span class="brand-mark" aria-hidden="true">R<span>·</span></span>
+                <div class="brand-name">RagAgent<span>EDA KNOWLEDGE WORKSPACE</span></div>
               </div>
-              <div class="app-status">
-                <span class="runtime-pill"><span class="runtime-dot"></span>Ready</span>
-                <span class="route-pill">/ragagent</span>
+              <div class="header-context"><span class="nav-current">文档工作台</span><span class="header-divider"></span><span>TED / EDA</span></div>
+            </header>
+            <section class="workspace-intro">
+              <div><div class="app-kicker">KNOWLEDGE, WITH CONTEXT</div>
+                <h1>把技术文档，变成你的工作伙伴<span>。</span></h1>
+                <p>查用法、理参数、找示例。从 TED 文档中获取回答，回到原文确认依据。</p>
               </div>
-            </div>
+              <div class="intro-index" aria-hidden="true"><span>WORKSPACE</span><strong>01 / QA</strong></div>
+            </section>
             """
         )
         with gr.Row(elem_classes=["workspace-layout"]):
-            with gr.Column(scale=4, min_width=340, elem_classes=["workspace-panel", "query-console"]):
-                gr.HTML(
-                    """
-                    <div class="panel-head">
-                      <div>
-                        <div class="panel-kicker">Query Console</div>
-                        <div class="panel-title">检索输入</div>
-                      </div>
-                      <span class="panel-tag">Rewrite</span>
-                    </div>
-                    """
-                )
+            with gr.Column(scale=4, min_width=320, elem_classes=["workspace-panel", "query-console"]):
+                gr.HTML('<div class="panel-head"><div><span class="panel-kicker">01 / ASK</span><h2>从一个问题开始</h2></div><span class="panel-tag">TED 文档</span></div>')
                 question = gr.Textbox(
-                    label="Question",
-                    placeholder="输入 TED / EDA 文档相关问题",
-                    lines=5,
-                    max_lines=9,
+                    label="你的问题", placeholder="例如：如何配置瞬态仿真，并获取输出波形？",
+                    lines=4, max_lines=10, elem_id="question-input",
                 )
-                rewrite_mode = gr.Radio(
-                    label="Rewrite 模式",
-                    choices=[_REWRITE_MODE_CONSERVATIVE_LABEL, _REWRITE_MODE_AGGRESSIVE_LABEL],
-                    value=_REWRITE_MODE_AGGRESSIVE_LABEL,
-                )
-                with gr.Row(elem_classes=["action-row"]):
-                    rewrite_btn = gr.Button("Rewrite", elem_classes=["secondary-action"])
-                    ask_btn = gr.Button("Ask", variant="primary", elem_classes=["primary-action"])
-                rewrite_result = gr.Textbox(
-                    label="Rewrite Result",
-                    placeholder="Rewrite result will appear here",
-                    lines=5,
-                    max_lines=9,
-                    interactive=True,
-                )
-                final_query_source = gr.Radio(
-                    label="\u6700\u7ec8\u8f93\u5165\u6765\u6e90",
-                    choices=[_FINAL_SOURCE_ORIGINAL_LABEL, _FINAL_SOURCE_REWRITE_LABEL],
-                    value=_FINAL_SOURCE_ORIGINAL_LABEL,
-                )
-                rewrite_meta_html = gr.HTML(_rewrite_status_html())
+                ask_btn = gr.Button("检索并回答  →", variant="primary", elem_classes=["primary-action"])
+                gr.HTML('<div class="examples-heading">也可以试试这些问题</div>')
+                example_buttons = [gr.Button(text, size="sm", elem_classes=["example-question"]) for text in _EXAMPLE_QUESTIONS]
+                with gr.Accordion("优化提问 · 可选", open=False, elem_classes=["rewrite-options"]) as rewrite_options:
+                    gr.HTML('<p class="helper-text">问题不够明确时，可先生成改写建议。原始输入会保留。</p>')
+                    rewrite_mode = gr.Radio(
+                        label="改写方式", choices=[_REWRITE_MODE_CONSERVATIVE_LABEL, _REWRITE_MODE_AGGRESSIVE_LABEL],
+                        value=_REWRITE_MODE_AGGRESSIVE_LABEL,
+                    )
+                    rewrite_btn = gr.Button("生成改写建议", elem_classes=["secondary-action"])
+                    rewrite_result = gr.Textbox(
+                        label="改写建议", placeholder="生成后可在这里继续编辑", lines=3, max_lines=9, interactive=True,
+                    )
+                    final_query_source = gr.Radio(
+                        label="本次提问使用", choices=[("原始问题", _FINAL_SOURCE_ORIGINAL_LABEL), ("改写后的问题", _FINAL_SOURCE_REWRITE_LABEL)],
+                        value=_FINAL_SOURCE_ORIGINAL_LABEL,
+                    )
+                    rewrite_meta_html = gr.HTML(_rewrite_status_html())
                 rewrite_base_query_state = gr.State(value="")
                 rewrite_strategy_state = gr.State(value="")
                 rewrite_warning_state = gr.State(value="")
                 user_id_state = gr.Textbox(value="legacy", visible=False, elem_id="ragagent-user-id")
                 with gr.Group(elem_classes=["history-card"]):
                     with gr.Row(elem_classes=["history-head"]):
-                        gr.HTML('<div class="history-title">历史对话</div>')
-                        refresh_history_btn = gr.Button("刷新", elem_classes=["history-refresh"])
-                    history_select = gr.Radio(
-                        label="",
-                        choices=[],
-                        value=None,
-                        interactive=True,
-                        show_label=False,
-                        elem_classes=["history-list"],
-                    )
-                    history_status_html = gr.HTML('<div class="history-note">正在读取当前浏览器历史。</div>')
+                        gr.HTML('<h3 class="history-title">最近对话</h3>')
+                        refresh_history_btn = gr.Button("刷新", size="sm", min_width=52, scale=0, elem_classes=["history-refresh"])
+                    history_select = gr.Radio(label="历史对话", choices=[], value=None, interactive=True, show_label=False, elem_classes=["history-list"])
+                    history_status_html = gr.HTML('<div class="history-note">正在读取历史对话…</div>')
 
-            with gr.Column(scale=7, min_width=460, elem_classes=["workspace-panel", "result-console"]):
-                gr.HTML(
-                    """
-                    <div class="panel-head">
-                      <div>
-                        <div class="panel-kicker">Answer Console</div>
-                        <div class="panel-title">回答与证据</div>
-                      </div>
-                      <span class="panel-tag">RAG</span>
-                    </div>
-                    """
-                )
-                warning_html = gr.HTML(visible=False)
-                status_html = gr.HTML()
-                answer_md = gr.Markdown(elem_classes=["answer-md"])
+            with gr.Column(scale=7, min_width=440, elem_classes=["workspace-panel", "result-console"]):
+                gr.HTML('<div class="panel-head"><div><span class="panel-kicker">02 / EXPLORE</span><h2>回答与发现</h2></div><span class="panel-tag">基于文档的回答</span></div>')
+                warning_html = gr.HTML(visible=False, elem_classes=["warning-region"])
+                status_html = gr.HTML('<span class="status-badge status-idle">等待提问</span>', elem_id="answer-status")
+                answer_md = gr.Markdown(value=_EMPTY_ANSWER, elem_classes=["answer-md"])
                 record_id_state = gr.State(value=None)
                 with gr.Row(elem_classes=["feedback-row"]):
-                    useful_btn = gr.Button("有用", elem_classes=["secondary-action"])
-                    useless_btn = gr.Button("无用", elem_classes=["secondary-action"])
-                feedback_html = gr.HTML('<div class="card">请先提问，再点击“有用/无用”评价。</div>')
-                gr.HTML('<div class="evidence-title">Evidence</div>')
-                evidence_html = gr.HTML()
+                    feedback_html = gr.HTML('<div class="feedback-note">回答后可评价，帮助改进问答质量。</div>')
+                    useful_btn = gr.Button("有帮助", size="sm", min_width=76, scale=0, elem_classes=["feedback-action"])
+                    useless_btn = gr.Button("需改进", size="sm", min_width=76, scale=0, elem_classes=["feedback-action"])
+                gr.HTML('<div class="evidence-heading"><h3>参考依据 <span>SOURCES</span></h3><p>展开片段，核对原文</p></div>')
+                evidence_html = gr.HTML(_render_evidence([]), elem_id="evidence-results")
+        gr.HTML('<div class="workspace-footer"><span>RagAgent EDA</span><span>以文档为依据 · 让技术知识触手可及</span></div>')
 
         def _rewrite(input_question: str, selected_mode: str):
             query = (input_question or "").strip()
@@ -1726,7 +939,7 @@ def build_ragagent_ui(qa_agent: RagQaAgent, query_rewriter: QueryRewriter):
 
             if source_label == _FINAL_SOURCE_REWRITE_LABEL:
                 if not rewrite_candidate:
-                    warning_text = "rewrite result is empty"
+                    warning_text = "还没有改写建议，请先生成建议，或切换为原始问题。"
                     record_id, store_warn = _persist_qa_log(
                         user_id=user_id,
                         question=raw_query,
@@ -1750,7 +963,7 @@ def build_ragagent_ui(qa_agent: RagQaAgent, query_rewriter: QueryRewriter):
                         (
                             gr.update(value=f'<div class="warning">{escape(merged_warning)}</div>', visible=True),
                             _status_badge("error"),
-                            "_(empty)_",
+                            "暂无回答内容。",
                             _render_evidence([]),
                             record_id,
                             _feedback_hint_html(record_id),
@@ -1783,7 +996,7 @@ def build_ragagent_ui(qa_agent: RagQaAgent, query_rewriter: QueryRewriter):
                         (
                             gr.update(value=f'<div class="warning">{escape(merged_warning)}</div>', visible=True),
                             _status_badge("error"),
-                            "_(empty)_",
+                            "暂无回答内容。",
                             _render_evidence([]),
                             record_id,
                             _feedback_hint_html(record_id),
@@ -1796,7 +1009,7 @@ def build_ragagent_ui(qa_agent: RagQaAgent, query_rewriter: QueryRewriter):
                 qa_source = "ragagent_ui_original"
 
             if not query:
-                warning_text = "question is empty"
+                warning_text = "请先输入一个问题，或选择上方的示例。"
                 record_id, store_warn = _persist_qa_log(
                     user_id=user_id,
                     question=query,
@@ -1820,7 +1033,7 @@ def build_ragagent_ui(qa_agent: RagQaAgent, query_rewriter: QueryRewriter):
                     (
                         gr.update(value=f'<div class="warning">{escape(merged_warning)}</div>', visible=True),
                         _status_badge("error"),
-                        "_(empty)_",
+                        "暂无回答内容。",
                         _render_evidence([]),
                         record_id,
                         _feedback_hint_html(record_id),
@@ -1851,7 +1064,7 @@ def build_ragagent_ui(qa_agent: RagQaAgent, query_rewriter: QueryRewriter):
                     (
                         gr.update(value=_warning_html(merged_warning), visible=bool(merged_warning)),
                         _status_badge(result.status),
-                        result.answer if (result.answer or "").strip() else "_(empty)_",
+                        result.answer if (result.answer or "").strip() else "暂无回答内容。",
                         _render_evidence(result.evidence),
                         record_id,
                         _feedback_hint_html(record_id),
@@ -1882,12 +1095,23 @@ def build_ragagent_ui(qa_agent: RagQaAgent, query_rewriter: QueryRewriter):
                     (
                         gr.update(value=f'<div class="warning">{escape(merged_warning)}</div>', visible=True),
                         _status_badge("error"),
-                        "_(empty)_",
+                        "暂无回答内容。",
                         _render_evidence([]),
                         record_id,
                         _feedback_hint_html(record_id),
                     ),
                 )
+
+        def _choose_example(example: str):
+            return (example, *_clear_rewrite_state(""))
+
+        for example_button, example_text in zip(example_buttons, _EXAMPLE_QUESTIONS):
+            example_button.click(
+                lambda text=example_text: _choose_example(text), inputs=[],
+                outputs=[question, rewrite_result, final_query_source, rewrite_meta_html,
+                         rewrite_base_query_state, rewrite_strategy_state, rewrite_warning_state],
+                show_progress="hidden",
+            )
 
         rewrite_btn.click(
             _rewrite,
@@ -1946,6 +1170,7 @@ def build_ragagent_ui(qa_agent: RagQaAgent, query_rewriter: QueryRewriter):
                 feedback_html,
             ],
         )
+        ask_event.then(fn=None, js=_SCROLL_TO_ANSWER_JS, show_progress="hidden")
         ask_event.then(
             _refresh_history,
             inputs=[user_id_state],
@@ -1973,6 +1198,7 @@ def build_ragagent_ui(qa_agent: RagQaAgent, query_rewriter: QueryRewriter):
                 feedback_html,
             ],
         )
+        submit_event.then(fn=None, js=_SCROLL_TO_ANSWER_JS, show_progress="hidden")
         submit_event.then(
             _refresh_history,
             inputs=[user_id_state],

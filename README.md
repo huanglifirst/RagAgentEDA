@@ -1,12 +1,24 @@
-# RagAgentEDA (Phase-1 Demo)
+# RagAgentEDA
 
-后端 Demo：`Embedding RAG -> LangGraph Agent流程 -> 代码生成 -> 执行 -> 回传指标`。
+面向 TED / EDA 技术文档的问答工作台与任务执行原型，基于 FastAPI、Gradio 和 LangGraph。
+
+- **文档问答**：输入问题 → 可选改写 → 检索与重排 → 回答及原文依据；支持浏览器历史和回答评价。
+- **任务接口**：检索文档 → 生成测试脚本 → 可选本地 / SSH 执行 → 返回指标与日志。
+
+![RagAgent EDA 文档工作台](docs/assets/workbench-desktop.png)
+
+使用步骤见 [工作台使用指南](docs/workbench-guide.md)，架构与运行机制见 [项目说明](项目说明.md)。
 
 ## 当前实现概览
 1. **Resource 全量向量化代码在哪？**
    - `backend/rag/indexer.py`：扫描 `Resource/` 下文档并切块
    - `backend/rag/vector_store.py`：调用 embedding / rerank 相关客户端并维护向量索引
-   - `backend/agents/orchestrator.py` `_retrieve`：任务中检索与二阶段重排
+   - `backend/agents/orchestrator.py` `_retrieve`：任务中候选融合与二阶段重排
+   - `backend/agents/qa_agent.py`：文档问答、运行时检索缓存和证据不足处理
+   - `backend/agents/query_rewriter.py`：按保守 / 激进模式生成改写建议
+   - `backend/ui/gradio_ragagent.py`：工作台组件、交互和证据渲染
+   - `backend/ui/workbench.css`：工作台配色、控件和响应式布局
+   - `backend/storage/qa_feedback_store.py`：SQLite 历史与评价存储
 
 2. **向量化后保存在哪？**
    - 默认目录：`./workdir/vector_index/`
@@ -60,14 +72,19 @@
   - 再执行 `test_api.py` 或 `/v1/rag/reindex` 验证连通性
 
 ## 启动
+
+本次验证环境为 Python 3.11。建议使用独立虚拟环境，在仓库根目录运行命令。
+
 先复制 `.env.example` 为 `.env`，填写自己的 API 密钥和运行配置。`.env` 仅保存在本机，不提交到 Git。
 
 ```bash
-pip install -r requirements.txt
-uvicorn backend.app:app --host 0.0.0.0 --port 8000
+python -m pip install -r requirements.txt
+python -m uvicorn backend.app:app --host 127.0.0.1 --port 8000
 ```
 
-也可以用仓库脚本启动：
+依赖文件固定了 Gradio 4.44.1，并约束 `huggingface-hub<1.0`，以兼容 Gradio 使用的 `HfFolder` 导入。部署时需要同时携带 `backend/ui/workbench.css`。
+
+也可以用仓库脚本启动（默认监听 `0.0.0.0:8000`，用于内网访问）：
 ```bash
 # Windows (cmd)
 scripts\start_server.bat
@@ -88,7 +105,35 @@ http://127.0.0.1:8000/docs
 http://127.0.0.1:8000/health
 ```
 
+## 新版文档工作台
+
+- 桌面双栏，窄屏单栏；暖灰底色搭配深绿色主操作。
+- 点击示例问题只填入输入框，不会自动调用模型；点击“检索并回答”后开始问答。
+- “优化提问 · 可选”默认折叠，包含改写模式、可编辑建议和本次输入来源。
+- 编辑原问题或选择新示例会清除旧改写，避免使用过期建议。
+- 回答支持 Markdown、代码和表格；“参考依据”展示文档路径、相关度和片段，第一条默认展开。
+- “有帮助 / 需改进”记录评价；最近对话可恢复问题、回答及证据。
+- 窄屏提问完成后自动定位回答区，尊重系统的减少动画偏好。
+
+历史数据保存在服务端 `workdir/qa_feedback.db`，通过浏览器 `localStorage` 中的标识筛选；这不是登录或权限认证。详见 [使用指南](docs/workbench-guide.md)。
+
+## 应用接口
+
+| 方法 | 路径 | 用途 |
+| --- | --- | --- |
+| GET | `/ragagent` | Gradio 文档问答工作台 |
+| GET | `/docs` | Swagger 接口文档 |
+| GET | `/health` | 服务和配置状态 |
+| POST | `/v1/query/rewrite` | 生成改写建议，不执行问答 |
+| POST | `/v1/rag/ask` | 文档问答，返回状态、答案和证据 |
+| POST | `/v1/rag/reindex` | 强制重建向量索引 |
+| POST | `/v1/tasks/run` | 生成并可选执行测试脚本 |
+
+问答请求体示例：`{"question":"如何测量运放的带宽？"}`。
+改写请求体示例：`{"query":"如何测量运放的带宽？","scene":"qa","mode":"aggressive"}`。
+
 ## 健康检查
+
 ```bash
 curl http://127.0.0.1:8000/health
 ```
@@ -141,7 +186,7 @@ curl -X POST 'http://127.0.0.1:8000/v1/tasks/run' \
 当 `execute=false` 时，接口只做检索和代码生成，返回 `generated_code + evidence`，不执行脚本。
 
 检索流程（`execute=false`）：
-- stage-1：向量召回（embedding）
+- stage-1：向量召回 + 词法候选补充，按 chunk ID 去重合并
 - stage-2：`qwen3-rerank` 二阶段重排
 - rerank 失败：回退 lexical rerank，并在 `logs.stderr` 留 warning
 
@@ -155,7 +200,7 @@ curl -X POST 'http://127.0.0.1:8000/v1/tasks/run' \
 - `execute=false` 仅做检索+代码生成，不执行脚本。
 
 ## 检索回归脚本
-已内置回归用例与脚本：
+以下是本地开发环境使用的回归用例与脚本，位于已忽略的 `workdir/`，不随 Git 仓库分发；只有本机存在这些文件时才能运行：
 - `workdir/retrieval_regression_cases.json`
 - `workdir/run_retrieval_regression.py`
 
@@ -192,3 +237,15 @@ python scripts/smoke_check.py --base-url http://127.0.0.1:8000
 - `/health` 返回 `ok=true`
 - `/v1/rag/reindex` 返回 `chunk_count > 0`
 - `/v1/rag/reindex` 返回 `vector_count == chunk_count`
+
+
+`smoke_check.py` 会实际调用重建索引接口，可能产生 embedding / rerank 请求；它不包含浏览器交互验收。
+
+## 本次界面更新的验证范围（2026-09-09）
+
+- 实际构建并访问 Gradio 页面；Python 编译、`pip check` 和补丁格式检查通过。
+- 使用独立模拟回答验证示例填入、改写与来源选择、旧改写清除、引用折叠、代码和表格渲染、评价、历史恢复、无结果与服务错误状态。
+- 检查桌面与 390px 手机布局、系统暗色偏好下的固定浅色界面、键盘焦点、减少动画偏好，以及手机提交后自动定位回答。
+- 本轮未调用真实模型验证答案质量，也未运行真实 TED 仿真；上述 UI 检查不代表检索质量或仿真能力验收。
+
+截图为真实页面的初始状态，不包含模拟答案。临时预览环境、测试数据、日志和数据库保存在 `workdir/`，不上传至 GitHub。

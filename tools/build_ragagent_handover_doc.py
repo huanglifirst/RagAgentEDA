@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import textwrap
+import shutil
 
 from docx import Document
 from docx.enum.section import WD_SECTION
@@ -150,92 +151,12 @@ def make_architecture_diagram(path: Path) -> None:
 
 
 def make_ui_overview(path: Path) -> None:
-    img = Image.new("RGB", (1650, 950), "#eef3f2")
-    d = ImageDraw.Draw(img)
-    h1 = _font(36, True)
-    h2 = _font(24, True)
-    h3 = _font(20, True)
-    body = _font(19)
-    small = _font(16)
-    mono = ImageFont.truetype("C:/Windows/Fonts/consola.ttf", 17) if Path("C:/Windows/Fonts/consola.ttf").exists() else small
-
-    rounded(d, (32, 28, 1618, 120), "#ffffff", f"#{PALETTE['line']}", 12, 1)
-    d.text((62, 52), "RAGAGENT EDA", font=small, fill=f"#{PALETTE['accent']}")
-    d.text((62, 74), "TED文档问答助手", font=h1, fill=f"#{PALETTE['ink']}")
-    rounded(d, (1450, 58, 1525, 92), "#f8faf9", f"#{PALETTE['line']}", 18, 1)
-    d.ellipse((1462, 70, 1474, 82), fill=f"#{PALETTE['success']}")
-    d.text((1480, 65), "Ready", font=small, fill=f"#{PALETTE['muted']}")
-    rounded(d, (1540, 58, 1592, 92), "#f8faf9", f"#{PALETTE['line']}", 18, 1)
-    d.text((1550, 65), "/ragagent", font=small, fill=f"#{PALETTE['muted']}")
-
-    rounded(d, (32, 145, 605, 895), "#ffffff", f"#{PALETTE['line']}", 12, 2)
-    d.rectangle((32, 145, 38, 895), fill=f"#{PALETTE['accent']}")
-    d.text((65, 170), "QUERY CONSOLE", font=small, fill=f"#{PALETTE['accent']}")
-    d.text((65, 196), "检索输入", font=h2, fill=f"#{PALETTE['ink']}")
-    rounded(d, (560, 170, 590, 200), "#f2f7f6", f"#{PALETTE['line']}", 15, 1)
-    d.text((570, 176), "R", font=small, fill=f"#{PALETTE['muted']}")
-
-    d.text((72, 250), "Question", font=h3, fill="#646cff")
-    rounded(d, (72, 282, 575, 415), "#fbfdfc", "#e5e7eb", 8, 1)
-    draw_wrapped(d, (92, 305), "如何使用 TED 进行 AC 仿真？", body, f"#{PALETTE['ink']}", 455)
-
-    d.text((72, 450), "Rewrite 模式", font=h3, fill="#646cff")
-    rounded(d, (72, 485, 145, 525), "#ffffff", "#e5e7eb", 8, 1)
-    d.text((98, 495), "保守型", font=small, fill=f"#{PALETTE['ink']}")
-    rounded(d, (158, 485, 255, 525), "#e7f4f2", f"#{PALETTE['accent']}", 8, 2)
-    d.ellipse((174, 495, 190, 511), outline=f"#{PALETTE['accent']}", width=2)
-    d.ellipse((178, 499, 186, 507), fill=f"#{PALETTE['accent']}")
-    d.text((198, 495), "激进型", font=small, fill=f"#{PALETTE['ink']}")
-
-    rounded(d, (72, 555, 310, 605), "#ffffff", "#e5e7eb", 8, 1)
-    d.text((155, 568), "Rewrite", font=h3, fill=f"#{PALETTE['ink']}")
-    rounded(d, (325, 555, 575, 605), "#0f766e", "#0f766e", 8, 1)
-    d.text((425, 568), "Ask", font=h3, fill="#ffffff")
-
-    d.text((72, 650), "Rewrite Result", font=h3, fill="#646cff")
-    rounded(d, (72, 682, 575, 795), "#fbfdfc", "#e5e7eb", 8, 1)
-    draw_wrapped(d, (92, 705), "如何在 TED 中进行 AC 仿真，包括频率扫描设置、结果获取和参数配置？", body, f"#{PALETTE['ink']}", 455)
-
-    rounded(d, (625, 145, 1618, 895), "#ffffff", f"#{PALETTE['line']}", 12, 2)
-    d.rectangle((625, 145, 631, 895), fill=f"#{PALETTE['accent2']}")
-    d.text((660, 170), "ANSWER CONSOLE", font=small, fill=f"#{PALETTE['accent']}")
-    d.text((660, 196), "回答与证据", font=h2, fill=f"#{PALETTE['ink']}")
-    rounded(d, (1530, 170, 1586, 200), "#f2f7f6", f"#{PALETTE['line']}", 15, 1)
-    d.text((1548, 176), "RAG", font=small, fill=f"#{PALETTE['muted']}")
-    rounded(d, (660, 240, 735, 275), "#eaf7f0", "#c7f0d8", 18, 1)
-    d.text((678, 248), "ANSWERED", font=small, fill=f"#{PALETTE['success']}")
-
-    rounded(d, (685, 320, 1580, 840), "#fbfdfc", "#d9e2df", 10, 1)
-    draw_wrapped(
-        d,
-        (715, 350),
-        "在 TED 中运行 AC 仿真主要使用 ac() 函数进行频率扫描，并通过 raw.get_signal() 获取结果。",
-        body,
-        f"#{PALETTE['ink']}",
-        820,
-    )
-    d.text((715, 420), "1. AC 仿真核心函数 ac()", font=h3, fill=f"#{PALETTE['ink']}")
-    rounded(d, (715, 465, 1545, 520), "#eef5f4", "#d9e2df", 8, 1)
-    d.text((735, 482), "ac(start, stop, type, ND, stage, settings, options)", font=mono, fill=f"#{PALETTE['ink']}")
-    d.text((715, 560), "参数说明（表格证据渲染）：", font=h3, fill=f"#{PALETTE['ink']}")
-    x0, y0 = 715, 600
-    cols = [90, 390, 110, 110]
-    headers = ["参数", "说明", "类型", "默认值"]
-    rows = [
-        ["start", "扫描起始频率", "float", "100"],
-        ["stop", "扫描终止频率", "float", "1e9"],
-        ["type", "扫描模式 dec / lin / oct", "str", "dec"],
-    ]
-    for i, width in enumerate(cols):
-        d.rectangle((x0 + sum(cols[:i]), y0, x0 + sum(cols[:i + 1]), y0 + 38), fill="#edf5f3", outline="#b8c7c3")
-        d.text((x0 + sum(cols[:i]) + 10, y0 + 9), headers[i], font=small, fill=f"#{PALETTE['ink']}")
-    for r, row in enumerate(rows):
-        y = y0 + 38 + r * 40
-        for i, width in enumerate(cols):
-            d.rectangle((x0 + sum(cols[:i]), y, x0 + sum(cols[:i + 1]), y + 40), fill="#ffffff", outline="#cfd8d5")
-            d.text((x0 + sum(cols[:i]) + 10, y + 10), row[i], font=small, fill=f"#{PALETTE['ink']}")
-
-    img.save(path)
+    """Reuse the actual workbench screenshot maintained with the user guide."""
+    source = ROOT / "docs" / "assets" / "workbench-desktop.png"
+    if not source.is_file():
+        raise FileNotFoundError(f"Missing workbench screenshot: {source}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(source, path)
 
 
 def make_evidence_table(path: Path) -> None:
@@ -638,7 +559,7 @@ nohup bash scripts/start_server.sh > workdir/ragagent.log 2>&1 &""",
         doc,
         ["入口", "用途", "交接说明"],
         [
-            ["http://<内网机IP>:8000/ragagent", "前端工作台", "用户使用入口，包含 Rewrite、Ask、Answer、Evidence、历史记录和反馈。"],
+            ["http://<内网机IP>:8000/ragagent", "前端工作台", "用户使用入口，包含示例提问、可选改写、回答、参考依据、最近对话和评价。"],
             ["http://<内网机IP>:8000/docs", "FastAPI 文档", "用于接口联调；生产内网可视权限策略决定是否开放。"],
             ["http://<内网机IP>:8000/health", "健康检查", "确认模型、Embedding、Rerank 配置是否已注入，以及索引 LATEST 指针。"],
         ],
@@ -672,7 +593,8 @@ BASE_URL=http://127.0.0.1:8000 bash scripts/reindex.sh""",
         ["路径", "职责", "维护关注点"],
         [
             ["backend/app.py", "FastAPI 入口；挂载 /ragagent；提供\n/health、/v1/rag/reindex、\n/v1/query/rewrite、/v1/rag/ask。", "新增接口或改路径时同步更新前端和交接文档。"],
-            ["backend/ui/gradio_ragagent.py", "Gradio 前端、Evidence HTML 渲染、历史记录、反馈按钮。", "前端样式、证据展示、历史记录异常优先看这里。"],
+            ["backend/ui/workbench.css", "工作台配色、控件、响应式和动效。", "与 UI 模块一起部署；修改后重启服务。"],
+            ["backend/ui/gradio_ragagent.py", "Gradio 前端、Evidence HTML 渲染、历史记录、反馈按钮。", "组件交互、证据展示、历史记录异常优先看这里。"],
             ["backend/agents/qa_agent.py", "问答主链路：加载索引、混合召回、重排、拒答、构造提示词、生成答案。", "问答质量、拒答阈值、prompt 策略主要在这里调。"],
             ["backend/agents/\nquery_rewriter.py", "query rewrite：保守型/激进型，保护实体和核心意图。", "检索词扩展过度或不够时调这里。"],
             ["backend/rag/indexer.py", "文档扫描、HTML 正文抽取、表格/代码块处理、切块。", "新增文件类型或切块策略调整在这里。"],
@@ -752,7 +674,7 @@ BASE_URL=http://127.0.0.1:8000 bash scripts/reindex.sh""",
         [
             ["GET /health", "无", "ok、模型配置是否有 key、embedding/rerank 配置、vector_index_latest。", "服务活性和配置检查。"],
             ["POST /v1/rag/reindex", "无 body", "doc_count、fingerprint、chunk_count、vector_count、saved_file、qa_cache_warmed。", "更新文档后重建索引。"],
-            ["POST /v1/query/rewrite", '{"query":"...","scene":"qa","mode":"aggressive"}', "original_query、rewritten_query、changed、strategy、warning。", "前端 Rewrite 按钮。"],
+            ["POST /v1/query/rewrite", '{"query":"...","scene":"qa","mode":"aggressive"}', "original_query、rewritten_query、changed、strategy、warning。", "前端“生成改写建议”按钮对应的代理能力。"],
             ["POST /v1/rag/ask", '{"question":"如何使用 TED 进行 AC 仿真？"}', "status、answer、evidence[]、warning。", "问答主接口。"],
         ],
         [4.1, 4.8, 6.0, 3.0],
@@ -777,18 +699,18 @@ BASE_URL=http://127.0.0.1:8000 bash scripts/reindex.sh""",
     add_heading(doc, "9. 前端工作台", 1)
     add_para(
         doc,
-        "前端由 Gradio 挂载在 /ragagent。页面分为左侧 Query Console 和右侧 Answer Console；下方 Evidence 区会展示来源、分数、文本/表格/代码片段。"
-        "用户可对回答做有用/无用反馈，历史记录按浏览器本地 user_id 读取。",
+        "前端由 Gradio 挂载在 /ragagent。桌面左侧为“从一个问题开始”，右侧为“回答与发现”；参考依据展示来源、相关度和文本/表格/代码。窄屏采用单栏，提问后自动定位回答。"
+        "用户可点击“有帮助 / 需改进”，历史按浏览器标识筛选服务端记录；该标识不提供登录认证。",
     )
     doc.add_picture(str(assets["ui"]), width=Inches(6.55))
-    add_caption(doc, "图 2  /ragagent 前端工作台示意（根据当前界面截图整理）")
+    add_caption(doc, "图 2  /ragagent 实际工作台初始页面（2026-09-09）")
     add_table(
         doc,
         ["区域", "功能", "维护点"],
         [
-            ["Query Console", "输入原始问题；选择 Rewrite 模式；决定最终输入来源。", "rewrite 后若用户改了原始问题，前端会提示重新 rewrite 或使用原始 query。"],
-            ["Answer Console", "展示状态、warning、Markdown 答案、反馈按钮。", "答案为空、not_found 或 error 时看 qa_agent 的 warning 和后端日志。"],
-            ["Evidence", "按 source、score 和 snippet 展示检索证据；支持表格和代码渲染。", "Evidence 不准时先判断是文档、索引、召回、rerank 还是 query rewrite 问题。"],
+            ["从一个问题开始", "输入或选择示例；点击检索并回答；可选展开改写设置。", "编辑原问题、切换模式或选择新示例会清除旧改写并恢复原始来源。"],
+            ["回答与发现", "展示中文状态、提示、Markdown 回答和评价按钮。", "答案为空、not_found 或 error 时看 qa_agent 的 warning 和后端日志。"],
+            ["参考依据", "展示来源、相关度和片段；第一条默认展开，支持表格和代码。", "Evidence 不准时先判断是文档、索引、召回、rerank 还是 query rewrite 问题。"],
             ["历史对话", "记录当前浏览器 user_id 下最近问答，支持回填历史问题和证据。", "数据写入 workdir/qa_feedback.db。"],
         ],
         [3.4, 7.2, 6.2],
@@ -868,7 +790,7 @@ BASE_URL=http://127.0.0.1:8000 bash scripts/reindex.sh""",
         [
             ["代码目录确认", "能进入部署目录，且 requirements.txt、backend、Resource、scripts、workdir 存在。"],
             ["服务启动", "scripts/start_server.sh 能正常启动，/health 返回 ok=true。"],
-            ["前端访问", "/ragagent 能打开，Ready 状态显示正常。"],
+            ["前端访问", "/ragagent 能打开；初始显示等待提问；示例填入和可选改写展开正常。"],
             ["索引重建", "/v1/rag/reindex 返回 chunk_count > 0 且 vector_count == chunk_count。"],
             ["问答验收", "典型 TED 问题能返回 answered，Evidence 来源正确。"],
             ["反馈日志", "点击有用/无用后 qa_feedback.db 中记录可查询。"],
